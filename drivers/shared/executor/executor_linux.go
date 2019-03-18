@@ -129,7 +129,7 @@ func (l *LibcontainerExecutor) Launch(command *ExecCommand) (*ProcessState, erro
 	factory, err := libcontainer.New(
 		path.Join(command.TaskDir, "../alloc/container"),
 		libcontainer.Cgroupfs,
-		libcontainer.InitArgs(bin, "libcontainer-shim"),
+		libcontainerInitArgs(bin, "libcontainer-shim"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create factory: %v", err)
@@ -762,4 +762,27 @@ func cmdMounts(mounts []*drivers.MountConfig) []*lconfigs.Mount {
 	}
 
 	return r
+}
+
+// libcontainerInitArgs returns an options func to configure a LinuxFactory with the
+// provided init binary path and arguments.
+//
+// Workaround open PR https://github.com/opencontainers/runc/pull/1888
+// remove when PR is merged
+func libcontainerInitArgs(args ...string) func(*libcontainer.LinuxFactory) error {
+	return func(l *libcontainer.LinuxFactory) (err error) {
+		if len(args) > 0 {
+			// Resolve relative paths to ensure that its available
+			// after directory changes.
+			if args[0], err = filepath.Abs(args[0]); err != nil {
+				return fmt.Errorf("Invalid configuration: %v", err)
+			}
+		}
+
+		l.InitPath = args[0]
+		if len(args) > 1 {
+			l.InitArgs = args[1:]
+		}
+		return nil
+	}
 }
